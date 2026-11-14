@@ -13,7 +13,7 @@ A Flutter ride-booking app for Hantour and Felucca river rides in Luxor, Egypt.
 | Google Play | Live ✓ |
 | App Store (iOS) | Live ✓ |
 
-> **Apple account note:** FluTour Passenger is live on the App Store. The only remaining Apple-related item is the Apple Developer account migration from Individual to Organization, which is needed for the Driver app.
+> **Apple account note:** FluTour is live on the App Store. The only remaining Apple-related item is the Apple Developer account migration from Individual to Organization for the Driver app.
 
 ## Features
 

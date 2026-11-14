@@ -62,7 +62,7 @@ Cloud Functions: `functions/`
 | Cloud Functions (earnings / notifications) | 🔧 In Progress |
 | Payment gateway (Vodafone Cash / InstaPay) | 🔧 In Progress |
 | Google Play Store | ✅ Live |
-| Apple App Store | ✅ Passenger live · Driver pending |
+| Apple App Store | ✅ FluTour live · Driver migration pending |
 | Declined trip persistence across restarts | ✅ Fixed |
 | Google sign-in button with official G logo | ✅ Fixed |
 
@@ -76,11 +76,11 @@ Cloud Functions: `functions/`
 |-------|-----|--------|-------|
 | Google Play | FluTour — Book a Ride | ✅ Live | Active — v1.0.2 (Sep 21, 2026) |
 | Google Play | FluTour Driver | ✅ Live | Active — v1.0.2 (Sep 21, 2026) |
-| Apple App Store | FluTour | ✅ Live | Passenger app is live on the App Store |
-| Apple App Store | FluTour Driver | ⚠️ Pending | Only the Individual → Organization Apple Developer account migration remains |
+| Apple App Store | FluTour | ✅ Live | FluTour app is live on the App Store |
+| Apple App Store | FluTour Driver | ⚠️ Pending | Only the Individual → Organization Apple Developer account migration remains for Driver |
 
 > **Apple rejection fixes applied:** Sign in with Apple (4.8), account deletion (5.1.1v), notification sounds, auth persistence — all code complete in v1.0.2.
-> **Pending:** Apple Developer account conversion Individual → Organization (contacted Apple support Sep 21, 2026 — awaiting response). FluTour Passenger is already live on the App Store.
+> **Pending:** Only the Apple Developer account conversion from Individual → Organization for FluTour Driver (contacted Apple support Sep 21, 2026 — awaiting response). FluTour is already live on the App Store.
 > Review times: Google Play 1–3 days · Apple App Store 1–7 days
 
 ---
