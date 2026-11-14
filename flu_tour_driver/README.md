@@ -13,7 +13,7 @@ A Flutter app for drivers managing Hantour and Felucca river ride requests in Lu
 | Google Play | Not live — requires more testing before public release |
 | App Store (iOS) | Pending — Apple Developer account migrating from Individual to Organization |
 
-> **Apple account note:** The account is currently in migration from an Individual to an Organization account. This migration must complete before either app (Passenger or Driver) can be submitted to the App Store for production.
+> **Apple account note:** FluTour Passenger is live on the App Store. The only remaining Apple-related item is the Apple Developer account migration from Individual to Organization, which must complete before the Driver app can be submitted for production.
 
 ## Features
 
