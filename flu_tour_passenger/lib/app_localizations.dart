@@ -80,6 +80,7 @@ class AppLocalizations {
   String get typeToSearch          => _t('Type to search any place...', 'اكتب للبحث عن أي مكان...');
   String get noResultsFound        => _t('No results found', 'لا توجد نتائج');
   String get searchingPlaces       => _t('Searching...', 'جاري البحث...');
+  String get popularPlaces         => _t('POPULAR PLACES', 'الأماكن الشائعة');
   String get enterPickupDropoff    => _t('Please enter pickup and drop-off locations', 'يرجى إدخال نقطتَي الانطلاق والوصول');
 
   // ── Vehicle & Booking ─────────────────────────────────────────────────────

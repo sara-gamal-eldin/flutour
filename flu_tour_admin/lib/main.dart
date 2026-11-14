@@ -7,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'firebase_options.dart';
 import 'models.dart';
 import 'database_service.dart';
@@ -33,17 +34,28 @@ class FluTourAdminApp extends StatelessWidget {
       title: 'FluTour Admin',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.deepPurple,
-        scaffoldBackgroundColor: Color(0xFFF5F6FA),
+        primaryColor: const Color(0xFF043A8B),
+        colorScheme: const ColorScheme.light(
+          primary: Color(0xFF043A8B),
+          secondary: Color(0xFF08A9E9),
+          surface: Colors.white,
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF1F6FC),
         appBarTheme: AppBarTheme(
-          backgroundColor: Colors.white,
+          backgroundColor: const Color(0xFF043A8B),
           elevation: 0,
-          iconTheme: IconThemeData(color: Colors.black),
-          titleTextStyle: TextStyle(
-            color: Colors.black,
+          iconTheme: const IconThemeData(color: Colors.white),
+          titleTextStyle: GoogleFonts.bricolageGrotesque(
+            color: Colors.white,
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
+        ),
+        textTheme: GoogleFonts.figtreeTextTheme(ThemeData.light().textTheme),
+        tabBarTheme: const TabBarThemeData(
+          labelColor: Color(0xFF043A8B),
+          unselectedLabelColor: Color(0xFF4B5F82),
+          indicatorColor: Color(0xFF08A9E9),
         ),
       ),
       // Navigation guard: go straight to dashboard if session is active
@@ -70,7 +82,7 @@ class AdminAuthService {
       _currentAdminEmail = user.email ?? '';
       try {
         final doc = await FirebaseFirestore.instance
-            .collection('users').doc(user.uid).get();
+            .collection('agents').doc(user.uid).get();
         _currentAdminRole = doc.data()?['role'] ?? 'admin';
         await prefs.setString('admin_email', _currentAdminEmail);
         await prefs.setString('admin_role', _currentAdminRole);
@@ -83,7 +95,7 @@ class AdminAuthService {
       final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email.trim(), password: password);
       final doc = await FirebaseFirestore.instance
-          .collection('users').doc(cred.user!.uid).get();
+          .collection('agents').doc(cred.user!.uid).get();
       final role = doc.data()?['role'] ?? '';
       if (role != 'admin' && role != 'super-admin') {
         await FirebaseAuth.instance.signOut();
@@ -174,7 +186,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFF1A1A2E),
+      backgroundColor: Color(0xFF031C47),
       body: FadeTransition(
         opacity: _fadeAnim,
         child: SafeArea(
@@ -190,11 +202,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                       Container(
                         padding: EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.deepPurple.shade700,
+                          color: Color(0xFF043A8B),
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.deepPurple.withOpacity(0.5),
+                              color: Color(0xFF043A8B).withOpacity(0.5),
                               blurRadius: 24,
                               spreadRadius: 4,
                             ),
@@ -232,7 +244,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                     hintText: 'admin@flutour.com',
                     hintStyle: TextStyle(color: Colors.white38),
                     prefixIcon:
-                        Icon(Icons.email, color: Colors.deepPurple.shade300),
+                        Icon(Icons.email, color: Color(0xFF08A9E9)),
                     filled: true,
                     fillColor: Colors.white12,
                     border: OutlineInputBorder(
@@ -253,7 +265,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                     hintText: '••••••••',
                     hintStyle: TextStyle(color: Colors.white38),
                     prefixIcon:
-                        Icon(Icons.lock, color: Colors.deepPurple.shade300),
+                        Icon(Icons.lock, color: Color(0xFF08A9E9)),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword
@@ -277,14 +289,14 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                 _isLoading
                     ? Center(
                         child: CircularProgressIndicator(
-                            color: Colors.deepPurple.shade300))
+                            color: Color(0xFF08A9E9)))
                     : SizedBox(
                         width: double.infinity,
                         height: 54,
                         child: ElevatedButton(
                           onPressed: _login,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.deepPurple.shade600,
+                            backgroundColor: Color(0xFF043A8B),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
@@ -341,8 +353,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         currentIndex: _selectedIndex,
         onTap: (i) => setState(() => _selectedIndex = i),
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.blue.shade700,
-        unselectedItemColor: Colors.grey,
+        selectedItemColor: Color(0xFF043A8B),
+        unselectedItemColor: Color(0xFF4B5F82),
         selectedLabelStyle:
             TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
         items: [
@@ -470,7 +482,7 @@ class _DashboardHomeTabState extends State<DashboardHomeTab> {
                 left: 16, right: 16, bottom: 16),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Colors.blue.shade800, Colors.blue.shade600],
+                colors: [Color(0xFF031C47), Color(0xFF043A8B)],
                 begin: Alignment.topLeft, end: Alignment.bottomRight,
               ),
             ),
@@ -768,7 +780,7 @@ class _PassengersScreenState extends State<PassengersScreen> {
                 hintText: 'Search passengers...',
                 prefixIcon: Icon(Icons.search, size: 20),
                 filled: true,
-                fillColor: Color(0xFFF5F6FA),
+                fillColor: Color(0xFFF1F6FC),
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none),
@@ -1025,9 +1037,9 @@ class _DriversScreenState extends State<DriversScreen>
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Colors.deepPurple,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: Colors.deepPurple,
+          labelColor: Color(0xFF043A8B),
+          unselectedLabelColor: Color(0xFF4B5F82),
+          indicatorColor: Color(0xFF08A9E9),
           tabs: [
             Tab(text: 'All (${_drivers.length})'),
             Tab(
@@ -1445,17 +1457,17 @@ class _BookingsScreenState extends State<BookingsScreen> {
                               padding: EdgeInsets.symmetric(
                                   horizontal: 16, vertical: 8),
                               decoration: BoxDecoration(
-                                color: _filter == f ? Colors.deepPurple : Colors.white,
+                                color: _filter == f ? Color(0xFF043A8B) : Colors.white,
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
                                   color: _filter == f
-                                      ? Colors.deepPurple
+                                      ? Color(0xFF043A8B)
                                       : Colors.grey.shade300,
                                 ),
                                 boxShadow: [
                                   if (_filter == f)
                                     BoxShadow(
-                                        color: Colors.deepPurple.withOpacity(0.3),
+                                        color: Color(0xFF043A8B).withOpacity(0.3),
                                         blurRadius: 8)
                                 ],
                               ),
@@ -1556,7 +1568,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
                 style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
-                    color: Colors.deepPurple),
+                    color: Color(0xFF043A8B)),
               ),
             ],
           ),
@@ -1972,7 +1984,7 @@ class _AdminSettingsTabState extends State<AdminSettingsTab> {
                   margin: EdgeInsets.only(bottom: 24),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Colors.deepPurple.shade700, Colors.deepPurple.shade400],
+                      colors: [Color(0xFF043A8B), Color(0xFF08A9E9)],
                       begin: Alignment.topLeft, end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(16),
@@ -2057,9 +2069,9 @@ class _AdminSettingsTabState extends State<AdminSettingsTab> {
                             children: [
                               CircleAvatar(
                                 radius: 18,
-                                backgroundColor: Colors.deepPurple.shade50,
+                                backgroundColor: Color(0xFFE6EEF9),
                                 child: Text(driverName.isNotEmpty ? driverName[0] : '?',
-                                    style: TextStyle(color: Colors.deepPurple.shade700, fontWeight: FontWeight.bold)),
+                                    style: TextStyle(color: Color(0xFF043A8B), fontWeight: FontWeight.bold)),
                               ),
                               SizedBox(width: 10),
                               Expanded(
@@ -2072,7 +2084,7 @@ class _AdminSettingsTabState extends State<AdminSettingsTab> {
                                 ),
                               ),
                               Text('EGP ${amount.toStringAsFixed(0)}',
-                                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.deepPurple.shade700)),
+                                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF043A8B))),
                             ],
                           ),
                           SizedBox(height: 10),
@@ -2170,7 +2182,7 @@ class _AdminSettingsTabState extends State<AdminSettingsTab> {
                     keyboardType: TextInputType.phone,
                     decoration: InputDecoration(
                       hintText: '01XXXXXXXXX',
-                      prefixIcon: Icon(Icons.phone, color: Colors.deepPurple.shade400),
+                      prefixIcon: Icon(Icons.phone, color: Color(0xFF043A8B)),
                       filled: true,
                       fillColor: Colors.white,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -2194,7 +2206,7 @@ class _AdminSettingsTabState extends State<AdminSettingsTab> {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple.shade600,
+                    backgroundColor: Color(0xFF043A8B),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                   ),
@@ -2226,7 +2238,7 @@ class _AdminSettingsTabState extends State<AdminSettingsTab> {
                 child: ElevatedButton(
                   onPressed: _savingMultipliers ? null : _saveMultipliers,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade700,
+                    backgroundColor: Color(0xFF043A8B),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: _savingMultipliers
@@ -2253,7 +2265,7 @@ class _AdminSettingsTabState extends State<AdminSettingsTab> {
                     Container(
                       padding: EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade700,
+                        color: Color(0xFF043A8B),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
@@ -2384,13 +2396,13 @@ class _RevenueBarChart extends StatelessWidget {
                 children: [
                   if (val > 0)
                     Text('${val.toStringAsFixed(0)}',
-                        style: TextStyle(fontSize: 9, color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
+                        style: TextStyle(fontSize: 9, color: Color(0xFF043A8B), fontWeight: FontWeight.bold)),
                   SizedBox(height: 2),
                   AnimatedContainer(
                     duration: Duration(milliseconds: 600),
                     height: (100 * ratio).clamp(4, 100).toDouble(),
                     decoration: BoxDecoration(
-                      color: isToday ? Colors.blue.shade700 : Colors.blue.shade200,
+                      color: isToday ? Color(0xFF043A8B) : Color(0xFF9ADBF7),
                       borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
                     ),
                   ),
@@ -2483,7 +2495,7 @@ class _PromoCodeManagerState extends State<_PromoCodeManager> {
             ElevatedButton(
               onPressed: _addPromo,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue.shade700,
+                backgroundColor: Color(0xFF043A8B),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 padding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
               ),

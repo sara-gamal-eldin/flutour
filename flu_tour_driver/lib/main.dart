@@ -25,6 +25,7 @@ import 'package:provider/provider.dart';
 import 'app_localizations.dart';
 import 'locale_provider.dart';
 import 'sound_service.dart';
+import 'package:in_app_update/in_app_update.dart';
 
 // Must be a top-level function — called when app is in background/terminated
 @pragma('vm:entry-point')
@@ -300,6 +301,20 @@ class DriverAuthService {
       await prefs.setString('driver_name', _currentDriverName);
       await prefs.setString('driver_phone', _currentDriverPhone);
       await prefs.setString('driver_vehicle_type', _tempVehicleType);
+      // Notify admin of new driver registration
+      try {
+        await http.post(
+          Uri.parse('https://flutour.com/.netlify/functions/admin-notify'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'type': 'driver_registration',
+            'name': _currentDriverName,
+            'phone': _currentDriverPhone,
+            'vehicleType': VehicleTypeX.fromString(_tempVehicleType).value,
+            'vehicleId': _tempVehicleId,
+          }),
+        );
+      } catch (_) {}
       return null;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') return 'Phone number already registered';
@@ -526,9 +541,20 @@ class _DriverSplashScreenState extends State<DriverSplashScreen>
   late Animation<double> _scaleAnim;
   late Animation<double> _fadeAnim;
 
+  Future<void> _checkForUpdate() async {
+    try {
+      final info = await InAppUpdate.checkForUpdate();
+      if (!mounted) return;
+      if (info.updateAvailability == UpdateAvailability.updateAvailable) {
+        await InAppUpdate.performImmediateUpdate();
+      }
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
+    _checkForUpdate();
     _controller = AnimationController(
       vsync: this,
       duration: Duration(milliseconds: 1200),
@@ -703,6 +729,7 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
       // Save FCM token so Cloud Functions can send trip-request notifications
       try {
         await FirebaseMessaging.instance.requestPermission();
+        await FirebaseMessaging.instance.subscribeToTopic('driver_updates');
         final token = await FirebaseMessaging.instance.getToken();
         if (token != null && DriverAuthService.currentDriverId.isNotEmpty) {
           await FirebaseFirestore.instance
@@ -2974,7 +3001,14 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
           await DriverDatabaseService.instance.completeTrip(
               tripId,
               (widget.request['amount'] as num?)?.toDouble() ?? 0.0,
-              DriverAuthService.currentDriverId);
+              DriverAuthService.currentDriverId,
+              passengerName: widget.request['passenger'] as String? ?? '',
+              driverName: DriverAuthService.currentDriverName,
+              driverPhone: DriverAuthService.currentDriverPhone,
+              vehicleType: widget.request['vehicleType'] as String? ?? '',
+              pickup: widget.request['pickup'] as String? ?? '',
+              dropoff: widget.request['dropoff'] as String? ?? '',
+              paymentMethod: widget.request['payment'] as String? ?? '');
         }
         DriverLocationService.updateOnTripStatus(DriverAuthService.currentDriverId, false);
         setState(() => _step = 3);

@@ -32,6 +32,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'app_localizations.dart';
 import 'locale_provider.dart';
+import 'package:in_app_update/in_app_update.dart';
+import 'package:country_picker/country_picker.dart';
 
 // Must be a top-level function — called when app is in background/terminated
 @pragma('vm:entry-point')
@@ -92,7 +94,11 @@ class AuthService {
   static String _currentUserName = '';
   static String _currentUserPhone = '';
   static String _currentPhotoUrl = '';
+  static String _currentUserNationality = '';
+  static String _currentUserWhatsapp = '';
   static String _tempPassword = '';
+  static String _pendingSocialName = '';
+  static String _pendingSocialPhoto = '';
 
   static bool get isLoggedIn => FirebaseAuth.instance.currentUser != null;
   static String get currentUserId =>
@@ -100,12 +106,18 @@ class AuthService {
   static String get currentUserName => _currentUserName;
   static String get currentUserPhone => _currentUserPhone;
   static String get currentPhotoUrl => _currentPhotoUrl;
+  static String get currentUserNationality => _currentUserNationality;
+  static String get currentUserWhatsapp => _currentUserWhatsapp;
+  static String get pendingSocialName => _pendingSocialName;
+  static String get pendingSocialPhoto => _pendingSocialPhoto;
 
   static Future<void> loadSession() async {
     final prefs = await SharedPreferences.getInstance();
     _currentUserName = prefs.getString('passenger_name') ?? '';
     _currentUserPhone = prefs.getString('passenger_phone') ?? '';
     _currentPhotoUrl = prefs.getString('passenger_photo') ?? '';
+    _currentUserNationality = prefs.getString('passenger_nationality') ?? '';
+    _currentUserWhatsapp = prefs.getString('passenger_whatsapp') ?? '';
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
@@ -115,9 +127,13 @@ class AuthService {
           _currentUserName = doc.data()?['name'] ?? _currentUserName;
           _currentUserPhone = doc.data()?['phone'] ?? _currentUserPhone;
           _currentPhotoUrl = doc.data()?['photoUrl'] ?? user.photoURL ?? _currentPhotoUrl;
+          _currentUserNationality = doc.data()?['nationality'] ?? _currentUserNationality;
+          _currentUserWhatsapp = doc.data()?['whatsappNumber'] ?? _currentUserWhatsapp;
           await prefs.setString('passenger_name', _currentUserName);
           await prefs.setString('passenger_phone', _currentUserPhone);
           await prefs.setString('passenger_photo', _currentPhotoUrl);
+          await prefs.setString('passenger_nationality', _currentUserNationality);
+          await prefs.setString('passenger_whatsapp', _currentUserWhatsapp);
         }
       } catch (_) {}
     }
@@ -190,7 +206,7 @@ class AuthService {
   }
 
   static Future<String?> register(String name, String phone, String password,
-      {String nationality = ''}) async {
+      {String nationality = '', String whatsappNumber = ''}) async {
     if (name.isEmpty || phone.isEmpty || password.length < 6)
       return 'Password must be at least 6 characters';
     try {
@@ -198,11 +214,14 @@ class AuthService {
           email: _phoneToEmail(phone), password: password);
       _currentUserName = name;
       _currentUserPhone = phone.trim();
+      _currentUserNationality = nationality;
+      _currentUserWhatsapp = whatsappNumber;
       await FirebaseFirestore.instance
           .collection('users').doc(cred.user!.uid).set({
         'name': _currentUserName,
         'phone': _currentUserPhone,
         'nationality': nationality,
+        'whatsappNumber': whatsappNumber,
         'role': 'passenger',
         'totalRides': 0,
         'createdAt': FieldValue.serverTimestamp(),
@@ -210,6 +229,8 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('passenger_name', _currentUserName);
       await prefs.setString('passenger_phone', _currentUserPhone);
+      await prefs.setString('passenger_nationality', _currentUserNationality);
+      await prefs.setString('passenger_whatsapp', _currentUserWhatsapp);
       return null;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') return 'An account already exists for this phone number';
@@ -237,27 +258,23 @@ class AuthService {
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       final googlePhoto = cred.user?.photoURL ?? googleUser.photoUrl ?? '';
       if (!doc.exists) {
-        _currentUserName = cred.user?.displayName ?? googleUser.displayName ?? 'Passenger';
-        _currentUserPhone = cred.user?.phoneNumber ?? '';
-        _currentPhotoUrl = googlePhoto;
-        await FirebaseFirestore.instance.collection('users').doc(uid).set({
-          'name': _currentUserName,
-          'phone': _currentUserPhone,
-          'nationality': '',
-          'photoUrl': _currentPhotoUrl,
-          'role': 'passenger',
-          'totalRides': 0,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        // New user — store pending info and let UI collect the full profile
+        _pendingSocialName = cred.user?.displayName ?? googleUser.displayName ?? '';
+        _pendingSocialPhoto = googlePhoto;
+        return '__new_user__';
       } else {
         _currentUserName = doc.data()?['name'] ?? cred.user?.displayName ?? 'Passenger';
         _currentUserPhone = doc.data()?['phone'] ?? '';
         _currentPhotoUrl = doc.data()?['photoUrl'] ?? googlePhoto;
+        _currentUserNationality = doc.data()?['nationality'] ?? '';
+        _currentUserWhatsapp = doc.data()?['whatsappNumber'] ?? '';
       }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('passenger_name', _currentUserName);
       await prefs.setString('passenger_phone', _currentUserPhone);
       await prefs.setString('passenger_photo', _currentPhotoUrl);
+      await prefs.setString('passenger_nationality', _currentUserNationality);
+      await prefs.setString('passenger_whatsapp', _currentUserWhatsapp);
       return null;
     } on FirebaseAuthException catch (e) {
       return e.message ?? 'Google sign-in failed';
@@ -295,27 +312,23 @@ class AuthService {
       final uid = cred.user!.uid;
       final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       if (!doc.exists) {
-        _currentUserName = displayName;
-        _currentUserPhone = '';
-        _currentPhotoUrl = cred.user?.photoURL ?? '';
-        await FirebaseFirestore.instance.collection('users').doc(uid).set({
-          'name': _currentUserName,
-          'phone': '',
-          'nationality': '',
-          'photoUrl': _currentPhotoUrl,
-          'role': 'passenger',
-          'totalRides': 0,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        // New user — store pending info and let UI collect the full profile
+        _pendingSocialName = displayName;
+        _pendingSocialPhoto = cred.user?.photoURL ?? '';
+        return '__new_user__';
       } else {
         _currentUserName = doc.data()?['name'] ?? displayName;
         _currentUserPhone = doc.data()?['phone'] ?? '';
         _currentPhotoUrl = doc.data()?['photoUrl'] ?? '';
+        _currentUserNationality = doc.data()?['nationality'] ?? '';
+        _currentUserWhatsapp = doc.data()?['whatsappNumber'] ?? '';
       }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('passenger_name', _currentUserName);
       await prefs.setString('passenger_phone', _currentUserPhone);
       await prefs.setString('passenger_photo', _currentPhotoUrl);
+      await prefs.setString('passenger_nationality', _currentUserNationality);
+      await prefs.setString('passenger_whatsapp', _currentUserWhatsapp);
       return null;
     } on SignInWithAppleAuthorizationException catch (e) {
       if (e.code == AuthorizationErrorCode.canceled) return null;
@@ -324,6 +337,53 @@ class AuthService {
       return e.message ?? 'Apple sign-in failed';
     } catch (e) {
       return 'Apple sign-in failed: $e';
+    }
+  }
+
+  static Future<String?> completeSocialSignUp({
+    required String name,
+    required String phone,
+    required String dialCode,
+    required String nationality,
+    required String password,
+    String whatsappNumber = '',
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return 'Not authenticated';
+    try {
+      final fullPhone = dialCode + phone.replaceAll(RegExp(r'[^0-9]'), '');
+      _currentUserName = name;
+      _currentUserPhone = fullPhone;
+      _currentPhotoUrl = _pendingSocialPhoto;
+      _currentUserNationality = nationality;
+      _currentUserWhatsapp = whatsappNumber;
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'name': name,
+        'phone': fullPhone,
+        'nationality': nationality,
+        'whatsappNumber': whatsappNumber,
+        'photoUrl': _pendingSocialPhoto,
+        'role': 'passenger',
+        'totalRides': 0,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      // Link phone+password so the user can also sign in with phone/password later
+      try {
+        final emailCred = EmailAuthProvider.credential(
+          email: _phoneToEmail(fullPhone),
+          password: password,
+        );
+        await user.linkWithCredential(emailCred);
+      } catch (_) {}
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('passenger_name', _currentUserName);
+      await prefs.setString('passenger_phone', _currentUserPhone);
+      await prefs.setString('passenger_photo', _currentPhotoUrl);
+      await prefs.setString('passenger_nationality', _currentUserNationality);
+      await prefs.setString('passenger_whatsapp', _currentUserWhatsapp);
+      return null;
+    } catch (e) {
+      return 'Failed to save profile. Please try again.';
     }
   }
 
@@ -468,9 +528,20 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _scale;
   late Animation<double> _float;
 
+  Future<void> _checkForUpdate() async {
+    try {
+      final info = await InAppUpdate.checkForUpdate();
+      if (!mounted) return;
+      if (info.updateAvailability == UpdateAvailability.updateAvailable) {
+        await InAppUpdate.performImmediateUpdate();
+      }
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
+    _checkForUpdate();
     _controller = AnimationController(
         vsync: this, duration: Duration(seconds: 2));
     _scale = Tween<double>(begin: 0.95, end: 1.05).animate(
@@ -646,6 +717,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // Save FCM token so Cloud Functions can send trip-status notifications
       try {
         await FirebaseMessaging.instance.requestPermission();
+        await FirebaseMessaging.instance.subscribeToTopic('passenger_updates');
         final token = await FirebaseMessaging.instance.getToken();
         if (token != null && AuthService.currentUserId.isNotEmpty) {
           await FirebaseFirestore.instance
@@ -759,12 +831,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _googleLoading ? null : () async {
                         setState(() => _googleLoading = true);
-                        final error = await AuthService.signInWithGoogle();
+                        final result = await AuthService.signInWithGoogle();
                         if (!mounted) return;
                         setState(() => _googleLoading = false);
-                        if (error != null) {
+                        if (result == '__new_user__') {
+                          Navigator.push(context,
+                              MaterialPageRoute(builder: (_) => SocialSignUpScreen()));
+                        } else if (result != null) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(error)));
+                              SnackBar(content: Text(result)));
                         } else {
                           Navigator.pushAndRemoveUntil(
                               context,
@@ -792,13 +867,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _appleLoading ? null : () async {
                         setState(() => _appleLoading = true);
-                        final error = await AuthService.signInWithApple();
+                        final result = await AuthService.signInWithApple();
                         if (!mounted) return;
                         setState(() => _appleLoading = false);
-                        if (error != null && error.isNotEmpty) {
+                        if (result == '__new_user__') {
+                          Navigator.push(context,
+                              MaterialPageRoute(builder: (_) => SocialSignUpScreen()));
+                        } else if (result != null && result.isNotEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(error)));
-                        } else if (error == null) {
+                              SnackBar(content: Text(result)));
+                        } else if (result == null) {
                           Navigator.pushAndRemoveUntil(
                               context,
                               MaterialPageRoute(builder: (_) => PassengerHomeScreen()),
@@ -898,17 +976,18 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _nameCtrl = TextEditingController();
-  final _nationalityCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
+  final _whatsappCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+  Country? _country;
   bool _obscure = true;
   bool _loading = false;
 
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _nationalityCtrl.dispose();
     _phoneCtrl.dispose();
+    _whatsappCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
   }
@@ -952,11 +1031,168 @@ class _RegisterScreenState extends State<RegisterScreen> {
             _field('Full Name', 'Ahmed Hassan', Icons.person, _nameCtrl,
                 TextInputType.name),
             SizedBox(height: 16),
-            _field('Nationality', 'e.g. Egyptian, British...', Icons.flag, _nationalityCtrl,
-                TextInputType.text),
+            // Nationality — country picker
+            Text('Nationality', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => showCountryPicker(
+                context: context,
+                showPhoneCode: true,
+                onSelect: (Country c) => setState(() => _country = c),
+              ),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.flag, color: Colors.blue.shade600, size: 22),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _country == null
+                            ? 'Select your country'
+                            : '${_country!.flagEmoji}  ${_country!.name}',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: _country == null ? Colors.grey.shade500 : Colors.black87,
+                        ),
+                      ),
+                    ),
+                    Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+                  ],
+                ),
+              ),
+            ),
             SizedBox(height: 16),
-            _field('Phone Number', '01XXXXXXXXX', Icons.phone, _phoneCtrl,
-                TextInputType.phone),
+            // Phone number with country dial code prefix
+            Text('Phone Number', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () => showCountryPicker(
+                    context: context,
+                    showPhoneCode: true,
+                    onSelect: (Country c) => setState(() => _country = c),
+                  ),
+                  child: Container(
+                    height: 54,
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        bottomLeft: Radius.circular(12),
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      _country == null
+                          ? '🌍  +--'
+                          : '${_country!.flagEmoji}  +${_country!.phoneCode}',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: SizedBox(
+                    height: 54,
+                    child: TextField(
+                      controller: _phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      style: TextStyle(fontSize: 15),
+                      decoration: InputDecoration(
+                        hintText: '1234567890',
+                        contentPadding: EdgeInsets.symmetric(horizontal: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            // WhatsApp number (optional)
+            Text('WhatsApp Number (optional)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  height: 54,
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade400),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      bottomLeft: Radius.circular(12),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _country == null ? '🌍  +--' : '${_country!.flagEmoji}  +${_country!.phoneCode}',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Expanded(
+                  child: SizedBox(
+                    height: 54,
+                    child: TextField(
+                      controller: _whatsappCtrl,
+                      keyboardType: TextInputType.phone,
+                      style: TextStyle(fontSize: 15),
+                      decoration: InputDecoration(
+                        hintText: '1234567890',
+                        contentPadding: EdgeInsets.symmetric(horizontal: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
             SizedBox(height: 16),
             Text('Password', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
             SizedBox(height: 8),
@@ -987,6 +1223,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: ElevatedButton(
                       onPressed: () async {
                         if (_nameCtrl.text.trim().isEmpty ||
+                            _country == null ||
                             _phoneCtrl.text.trim().isEmpty ||
                             _passCtrl.text.trim().isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -994,12 +1231,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           return;
                         }
                         setState(() => _loading = true);
+                        final fullPhone = '+${_country!.phoneCode}${_phoneCtrl.text.trim().replaceAll(RegExp(r'[^0-9]'), '')}';
+                        final nationality = '${_country!.flagEmoji} ${_country!.name}';
+                        final whatsapp = _whatsappCtrl.text.trim().isEmpty ? '' : '+${_country!.phoneCode}${_whatsappCtrl.text.trim().replaceAll(RegExp(r'[^0-9]'), '')}';
                         // Step 1: create account
                         final error = await AuthService.register(
                             _nameCtrl.text.trim(),
-                            _phoneCtrl.text.trim(),
+                            fullPhone,
                             _passCtrl.text.trim(),
-                            nationality: _nationalityCtrl.text.trim());
+                            nationality: nationality,
+                            whatsappNumber: whatsapp);
                         if (!mounted) return;
                         if (error != null) {
                           setState(() => _loading = false);
@@ -1008,13 +1249,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           return;
                         }
                         // Step 2: send OTP for phone verification
-                        final otpError = await AuthService.sendPhoneOtp(_phoneCtrl.text.trim());
+                        final otpError = await AuthService.sendPhoneOtp(fullPhone);
                         if (!mounted) return;
                         setState(() => _loading = false);
                         if (otpError != null) {
                           // OTP send failed — go to home anyway (can verify later)
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Account created! Phone verification skipped: $otpError')));
                           Navigator.pushAndRemoveUntil(
                               context,
                               MaterialPageRoute(builder: (_) => PassengerHomeScreen()),
@@ -1024,7 +1263,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           Navigator.push(
                               context,
                               MaterialPageRoute(builder: (_) => OtpScreen(
-                                  phone: _phoneCtrl.text.trim(),
+                                  phone: fullPhone,
                                   name: _nameCtrl.text.trim())));
                         }
                       },
@@ -1071,7 +1310,347 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 }
 
-// ===== 4. OTP VERIFICATION SCREEN =====
+// ===== 4. SOCIAL SIGN-UP SCREEN =====
+// Shown to new Google/Apple users to collect name, nationality, phone, password
+class SocialSignUpScreen extends StatefulWidget {
+  @override
+  _SocialSignUpScreenState createState() => _SocialSignUpScreenState();
+}
+
+class _SocialSignUpScreenState extends State<SocialSignUpScreen> {
+  final _nameCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _whatsappCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  Country? _country;
+  bool _obscure = true;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl.text = AuthService.pendingSocialName;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _whatsappCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_nameCtrl.text.trim().isEmpty ||
+        _country == null ||
+        _phoneCtrl.text.trim().isEmpty ||
+        _passCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Please fill all fields')));
+      return;
+    }
+    if (_passCtrl.text.trim().length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Password must be at least 6 characters')));
+      return;
+    }
+    setState(() => _loading = true);
+    final whatsapp = _whatsappCtrl.text.trim().isEmpty ? '' : '+${_country!.phoneCode}${_whatsappCtrl.text.trim().replaceAll(RegExp(r'[^0-9]'), '')}';
+    final error = await AuthService.completeSocialSignUp(
+      name: _nameCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim().replaceAll(RegExp(r'[^0-9]'), ''),
+      dialCode: '+${_country!.phoneCode}',
+      nationality: '${_country!.flagEmoji} ${_country!.name}',
+      password: _passCtrl.text.trim(),
+      whatsappNumber: whatsapp,
+    );
+    if (!mounted) return;
+    setState(() => _loading = false);
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+    Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => PassengerHomeScreen()),
+        (_) => false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Complete Your Profile'),
+        centerTitle: true,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: Colors.blue.shade50, shape: BoxShape.circle),
+                child: Icon(Icons.person_add, size: 50, color: Colors.blue.shade700),
+              ),
+            ),
+            SizedBox(height: 8),
+            Center(
+              child: Text('Complete Your Profile',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            ),
+            SizedBox(height: 4),
+            Center(
+              child: Text('A few details to get you started',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+            ),
+            SizedBox(height: 32),
+            // Full Name
+            _field('Full Name', 'Ahmed Hassan', Icons.person, _nameCtrl, TextInputType.name),
+            SizedBox(height: 16),
+            // Nationality — country picker
+            Text('Nationality', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => showCountryPicker(
+                context: context,
+                showPhoneCode: true,
+                onSelect: (Country c) => setState(() => _country = c),
+              ),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.flag, color: Colors.blue.shade600, size: 22),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _country == null
+                            ? 'Select your country'
+                            : '${_country!.flagEmoji}  ${_country!.name}',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: _country == null ? Colors.grey.shade500 : Colors.black87,
+                        ),
+                      ),
+                    ),
+                    Icon(Icons.arrow_drop_down, color: Colors.grey.shade600),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: 16),
+            // Phone number with dial code prefix
+            Text('Phone Number', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () => showCountryPicker(
+                    context: context,
+                    showPhoneCode: true,
+                    onSelect: (Country c) => setState(() => _country = c),
+                  ),
+                  child: Container(
+                    height: 54,
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        bottomLeft: Radius.circular(12),
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      _country == null
+                          ? '🌍  +--'
+                          : '${_country!.flagEmoji}  +${_country!.phoneCode}',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: SizedBox(
+                    height: 54,
+                    child: TextField(
+                      controller: _phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      style: TextStyle(fontSize: 15),
+                      decoration: InputDecoration(
+                        hintText: '1234567890',
+                        contentPadding: EdgeInsets.symmetric(horizontal: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            // WhatsApp number (optional)
+            Text('WhatsApp Number (optional)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  height: 54,
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade400),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      bottomLeft: Radius.circular(12),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _country == null ? '🌍  +--' : '${_country!.flagEmoji}  +${_country!.phoneCode}',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Expanded(
+                  child: SizedBox(
+                    height: 54,
+                    child: TextField(
+                      controller: _whatsappCtrl,
+                      keyboardType: TextInputType.phone,
+                      style: TextStyle(fontSize: 15),
+                      decoration: InputDecoration(
+                        hintText: '1234567890',
+                        contentPadding: EdgeInsets.symmetric(horizontal: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade400),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            // Password
+            Text('Password', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            SizedBox(height: 8),
+            TextField(
+              controller: _passCtrl,
+              obscureText: _obscure,
+              decoration: InputDecoration(
+                hintText: '••••••••',
+                prefixIcon: Icon(Icons.lock, color: Colors.blue.shade600),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility,
+                      color: Colors.grey),
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+                ),
+              ),
+            ),
+            SizedBox(height: 32),
+            _loading
+                ? Center(child: CircularProgressIndicator())
+                : SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: _submit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade700,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: Text('Continue',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _field(String label, String hint, IconData icon,
+      TextEditingController ctrl, TextInputType type) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+        SizedBox(height: 8),
+        TextField(
+          controller: ctrl,
+          keyboardType: type,
+          decoration: InputDecoration(
+            hintText: hint,
+            prefixIcon: Icon(icon, color: Colors.blue.shade600),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ===== 5. OTP VERIFICATION SCREEN =====
 class OtpScreen extends StatefulWidget {
   final String phone;
   final String name;
@@ -2399,8 +2978,9 @@ class LocationSearchScreen extends StatefulWidget {
 class _LocationSearchScreenState extends State<LocationSearchScreen> {
   final _ctrl = TextEditingController();
   final _focus = FocusNode();
-  List<GeoSuggestion> _results = [];
+  List<GeoSuggestion> _results = GeocodingService.popularPlaces;
   bool _searching = false;
+  bool _showingPopular = true;
   Timer? _debounce;
 
   @override
@@ -2414,10 +2994,14 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
     _debounce?.cancel();
     final text = _ctrl.text.trim();
     if (text.length < 2) {
-      setState(() { _results = []; _searching = false; });
+      setState(() {
+        _results = GeocodingService.popularPlaces;
+        _showingPopular = true;
+        _searching = false;
+      });
       return;
     }
-    setState(() => _searching = true);
+    setState(() { _searching = true; _showingPopular = false; });
     _debounce = Timer(const Duration(milliseconds: 450), () async {
       final list = await GeocodingService.searchEgypt(text);
       if (mounted) setState(() { _results = list; _searching = false; });
@@ -2472,27 +3056,42 @@ class _LocationSearchScreenState extends State<LocationSearchScreen> {
         backgroundColor: Colors.teal.shade700,
         foregroundColor: Colors.white,
       ),
-      body: _results.isEmpty
-          ? Center(
-              child: Text(
-                _ctrl.text.trim().length < 2
-                    ? l.typeToSearch
-                    : (_searching ? l.searchingPlaces : l.noResultsFound),
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
-              ),
-            )
-          : ListView.separated(
-              itemCount: _results.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final s = _results[i];
-                return ListTile(
-                  leading: Icon(Icons.location_on, color: Colors.red.shade400),
-                  title: Text(s.name, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  onTap: () => Navigator.pop(context, s),
-                );
-              },
-            ),
+      body: _searching
+          ? const Center(child: CircularProgressIndicator())
+          : _results.isEmpty
+              ? Center(
+                  child: Text(
+                    l.noResultsFound,
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
+                  ),
+                )
+              : ListView.separated(
+                  itemCount: _results.length + (_showingPopular ? 1 : 0),
+                  separatorBuilder: (_, i) =>
+                      (_showingPopular && i == 0) ? const SizedBox.shrink() : const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    if (_showingPopular && i == 0) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                        child: Text(
+                          l.popularPlaces,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      );
+                    }
+                    final s = _results[_showingPopular ? i - 1 : i];
+                    return ListTile(
+                      leading: Icon(Icons.location_on, color: Colors.red.shade400),
+                      title: Text(s.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      onTap: () => Navigator.pop(context, s),
+                    );
+                  },
+                ),
     );
   }
 }
@@ -3551,6 +4150,9 @@ class _CashPaymentScreenState extends State<CashPaymentScreen> {
                             dropoff: widget.dropoff,
                             fare: _fareForType(widget.type),
                             paymentMethod: PaymentMethod.cash,
+                            passengerPhone: AuthService.currentUserPhone,
+                            passengerNationality: AuthService.currentUserNationality,
+                            passengerWhatsapp: AuthService.currentUserWhatsapp,
                           );
                           if (context.mounted) {
                             Navigator.push(
@@ -3684,6 +4286,9 @@ class _CreditCardPaymentScreenState extends State<CreditCardPaymentScreen> {
       dropoff: widget.dropoff,
       fare: _fareForType(widget.type),
       paymentMethod: PaymentMethod.creditCard,
+      passengerPhone: AuthService.currentUserPhone,
+      passengerNationality: AuthService.currentUserNationality,
+      passengerWhatsapp: AuthService.currentUserWhatsapp,
     );
     Future.delayed(Duration(seconds: 2), () {
       if (!mounted) return;
@@ -4085,6 +4690,9 @@ class _MobileWalletScreenState extends State<MobileWalletScreen> {
                           dropoff: widget.dropoff,
                           fare: _fareForType(widget.type),
                           paymentMethod: PaymentMethod.mobileWallet,
+                          passengerPhone: AuthService.currentUserPhone,
+                          passengerNationality: AuthService.currentUserNationality,
+                          passengerWhatsapp: AuthService.currentUserWhatsapp,
                         );
                         Future.delayed(Duration(seconds: 2), () {
                           if (!mounted) return;
@@ -6404,6 +7012,9 @@ class _SearchingDriverScreenState extends State<SearchingDriverScreen>
         dropoffLng: widget.dropoffLng,
         scheduledAt: widget.scheduledAt,
         passengerCount: widget.passengerCount,
+        passengerPhone: AuthService.currentUserPhone,
+        passengerNationality: AuthService.currentUserNationality,
+        passengerWhatsapp: AuthService.currentUserWhatsapp,
       );
       _tripId = trip.id;
 

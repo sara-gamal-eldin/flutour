@@ -6,8 +6,10 @@
 //   trips: status ASC, createdAt DESC
 //   notifications: userId ASC, createdAt DESC
 
+import 'dart:convert';
 import 'models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._();
@@ -86,6 +88,9 @@ class DatabaseService {
     double? dropoffLng,
     String? scheduledAt,
     int passengerCount = 1,
+    String passengerPhone = '',
+    String passengerNationality = '',
+    String passengerWhatsapp = '',
   }) async {
     final ref = await _db.collection('trips').add({
       'passengerId': passengerId,
@@ -111,6 +116,28 @@ class DatabaseService {
       if (scheduledAt != null) 'scheduledAt': scheduledAt,
       if (scheduledAt != null) 'isScheduled': true,
     });
+    // Notify admin immediately — no extra fetch needed, data passed directly
+    try {
+      await http.post(
+        Uri.parse('https://flutour.com/.netlify/functions/admin-notify'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'trip_request',
+          'passengerId': passengerId,
+          'passengerName': passengerName,
+          'passengerPhone': passengerPhone,
+          'passengerNationality': passengerNationality,
+          'passengerWhatsapp': passengerWhatsapp,
+          'vehicleType': vehicleType.value,
+          'pickup': pickup,
+          'dropoff': dropoff,
+          'fare': fare.toStringAsFixed(0),
+          'paymentMethod': paymentMethod.value,
+          'passengerCount': passengerCount,
+          'tripId': ref.id,
+        }),
+      );
+    } catch (_) {}
     return TripModel(
       id: ref.id,
       passengerId: passengerId,

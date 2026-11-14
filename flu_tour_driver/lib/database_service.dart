@@ -6,9 +6,11 @@
 //   trips: status ASC, createdAt DESC
 //   drivers: isOnline ASC, vehicleType ASC
 
+import 'dart:convert';
 import 'models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:http/http.dart' as http;
 
 class DriverDatabaseService {
   static final DriverDatabaseService instance = DriverDatabaseService._();
@@ -50,6 +52,23 @@ class DriverDatabaseService {
       'vehiclePhotoUrl': '',
       'photoUrl': '',
       'licensePhotoUrl': '',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    // Notify admin of new driver registration awaiting approval
+    _db.collection('mail').add({
+      'to': 'admin@app.flutour.com',
+      'message': {
+        'subject': 'New Driver Registration — ${driver.name} (Pending Approval)',
+        'html': '''
+          <h2>New Driver Registration — Pending Approval</h2>
+          <p><b>Name:</b> ${driver.name}</p>
+          <p><b>Phone:</b> ${driver.phone}</p>
+          <p><b>Vehicle Type:</b> ${driver.vehicleType.value}</p>
+          <p><b>Vehicle ID:</b> ${driver.vehicleId}</p>
+          <p><b>InstaPay:</b> ${driver.instapayPhone}</p>
+          <p>Review and approve this driver in the Admin Dashboard.</p>
+        ''',
+      },
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
@@ -167,19 +186,47 @@ class DriverDatabaseService {
     });
   }
 
-  Future<void> completeTrip(String tripId, double fare, String driverId) async {
+  Future<void> completeTrip(String tripId, double fare, String driverId, {
+    String passengerName = '',
+    String driverName = '',
+    String driverPhone = '',
+    String vehicleType = '',
+    String pickup = '',
+    String dropoff = '',
+    String paymentMethod = '',
+  }) async {
     final batch = _db.batch();
     batch.update(_db.collection('trips').doc(tripId), {
       'status': 'completed',
       'completedAt': FieldValue.serverTimestamp(),
     });
-    // 85% driver share (15% platform fee)
-    final driverEarning = fare * 0.85;
+    // 80% driver share (20% platform fee)
+    final driverEarning = fare * 0.80;
+    final platformFee = fare * 0.20;
     batch.update(_db.collection('drivers').doc(driverId), {
       'balance': FieldValue.increment(driverEarning),
       'totalTrips': FieldValue.increment(1),
     });
     await batch.commit();
+    // Send trip receipt to admin via Netlify function
+    try {
+      await http.post(
+        Uri.parse('https://flutour.com/.netlify/functions/admin-notify'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'trip_complete',
+          'tripId': tripId,
+          'passengerName': passengerName,
+          'driverName': driverName,
+          'driverPhone': driverPhone,
+          'vehicleType': vehicleType,
+          'pickup': pickup,
+          'dropoff': dropoff,
+          'paymentMethod': paymentMethod,
+          'fare': fare,
+        }),
+      );
+    } catch (_) {}
   }
 
   Future<List<TripModel>> getTripHistory(String uid) async {
